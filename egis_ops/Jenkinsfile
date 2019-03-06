@@ -162,15 +162,18 @@ spec:
               withCredentials([string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
                 withCredentials([string(credentialsId: 'app-database-password', variable: 'APP_DATABASE_PASSWORD')]) {
                   withCredentials([string(credentialsId: 'aldorisioj-github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                      git clone https://aldorisioj:${GITHUB_TOKEN}@github.com/ZolonTech/honeybadger-desired-state
-                      cd honeybadger-desired-state
-                      git checkout intial-dev
-                      oc login https://ocpegis.hnybdgr.net:443 --token=${JENKINS_TOKEN}
-                      DEPLOY_TAG=git-$(git rev-parse HEAD) DOCKER_REPO=${DOCKER_REPO} KUBE_CTX=$(kubectl config current-context) helmsman \
-                      --debug --apply -f ci/desired-state.yaml
-                    '''
-                    //${BRANCH_NAME}
+                    withCredentials([string(credentialsId: 'jwt-secret-token', variable: 'JWT_SECRET_TOKEN')]) {
+                      sh '''
+                        git clone https://aldorisioj:${GITHUB_TOKEN}@github.com/ZolonTech/egis-techchallenge-ops
+                        cd egis-techchallenge-ops
+                        oc login https://ocpegis.hnybdgr.net:443 --token=${JENKINS_TOKEN}
+                        DEPLOY_TAG=git-$(git rev-parse HEAD) DOCKER_REPO=${DOCKER_REPO} KUBE_CTX=$(kubectl config current-context) \
+                        JWT_SECRET_TOKEN=${JWT_SECRET_TOKEN} \
+                        helmsman \
+                        --debug --apply -f release/desired-state.yaml
+                      '''
+                      //${BRANCH_NAME}
+                    }
                   }
                 }
               }
