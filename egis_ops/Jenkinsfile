@@ -46,16 +46,12 @@ spec:
           withSonarQubeEnv('sonar') {
             // Ideally this should be broken up into 4 stages (Validate, Build, Test, Build Docker),
             // but putting them all in the same gradle command ensures that there aren't any tasks that get run twice.
-            // TEMPORARILY REMOVE SONARQUBE
-            // sh '''
-            //   ./gradlew -Pprod clean liquibaseValidate test bootWar jibDockerBuild sonar \
-            //   -Dsonar.host.url=$SONAR_HOST_URL \
-            //   -Dsonar.login=$SONAR_AUTH_TOKEN \
-            //   -Dsonar.branch=$GIT_BRANCH \
-            //   --no-daemon
-            // '''
             sh '''
-              ./gradlew -Pprod clean test bootWar jibDockerBuild --no-daemon
+              ./gradlew -Pprod clean test bootWar jibDockerBuild sonar \
+              -Dsonar.host.url=$SONAR_HOST_URL \
+              -Dsonar.login=$SONAR_AUTH_TOKEN \
+              -Dsonar.branch=$GIT_BRANCH \
+              --no-daemon
             '''
           }
         }
@@ -66,30 +62,29 @@ spec:
         }
       }
     }
-    //stage("SonarQube Quality Gate") {
-    //  steps {
-    //    retry(60) {
-    //      script {
-    //        try {
-    //          timeout(time: 10, unit: 'SECONDS') {
-    //            def qg = waitForQualityGate()
-    //            if (qg.status != 'OK' && qg.status != 'IN_PROGRESS' && qg.status != 'WARN') {
-    //              error "Pipeline aborted due to quality gate failure: ${qg.status}"
-    //            }
-    //          }
-    //        } catch(org.jenkinsci.plugins.workflow.steps.FlowInterruptedException err) {
-    //          error "Timeout. ${err}"
-    //        }
-    //      }
-    //    }
-    //  }
-    //}
+    stage("SonarQube Quality Gate") {
+     steps {
+       retry(60) {
+         script {
+           try {
+             timeout(time: 10, unit: 'SECONDS') {
+               def qg = waitForQualityGate()
+               if (qg.status != 'OK' && qg.status != 'IN_PROGRESS' && qg.status != 'WARN') {
+                 error "Pipeline aborted due to quality gate failure: ${qg.status}"
+               }
+             }
+           } catch(org.jenkinsci.plugins.workflow.steps.FlowInterruptedException err) {
+             error "Timeout. ${err}"
+           }
+         }
+       }
+     }
+    }
     stage('Login Docker') {
       when {
         anyOf {
-          branch 'ci'
+          branch 'release'
           branch 'master'
-          branch 'feature/Jenkinsfile'
         }
       }
       steps {
@@ -105,9 +100,8 @@ spec:
     stage('Push Revision') {
       when {
         anyOf {
-          branch 'ci'
+          branch 'release'
           branch 'master'
-          branch 'feature/Jenkinsfile'
         }
       }
       steps {
@@ -122,8 +116,7 @@ spec:
     stage('Push Unstable') {
       when {
         anyOf {
-          branch 'ci'
-          branch 'feature/Jenkinsfile'
+          branch 'release'
         }
       }
       steps {
@@ -151,9 +144,8 @@ spec:
     stage('Deploy') {
       when {
         anyOf {
-          branch 'ci'
+          branch 'release'
           branch 'master'
-          branch 'feature/Jenkinsfile'
         }
       }
       steps {
@@ -163,8 +155,8 @@ spec:
               sh '''
                 git clone https://aldorisioj:${GITHUB_TOKEN}@github.com/ZolonTech/egis-techchallenge-ops
                 cd egis-techchallenge-ops
-                git pull origin release
-                git checkout release                
+                git pull origin ${BRANCH_NAME}
+                git checkout ${BRANCH_NAME}
                 sed -i "s/^squarer=.*$/squarer=git-${GIT_COMMIT}/" versions.properties
                 git config --global user.email "donotreply@zolontech.com"
                 git config --global user.name "EGIS BuildBot"
@@ -172,7 +164,6 @@ spec:
                 git commit -m "update squarer deployment tag"
                 git push
               '''
-              //${BRANCH_NAME}
             }
           }
         }
